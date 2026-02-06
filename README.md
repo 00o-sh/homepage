@@ -9,6 +9,8 @@
   A modern, <em>fully static, fast</em>, secure <em>fully proxied</em>, highly customizable application dashboard with integrations for over 100 services and translations into multiple languages. Easily configured via YAML files or through docker label discovery.
 </p>
 
+> **Note:** This is an unofficial fork. We are not actively maintaining this project — we only publish images to GHCR to ship a feature that was rejected upstream for being AI-generated. Use at your own discretion.
+
 <p align="center">
   <img src="images/1.png?v=2" />
 </p>
