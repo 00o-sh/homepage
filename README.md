@@ -9,7 +9,7 @@
   A modern, <em>fully static, fast</em>, secure <em>fully proxied</em>, highly customizable application dashboard with integrations for over 100 services and translations into multiple languages. Easily configured via YAML files or through docker label discovery.
 </p>
 
-> **Note:** This is an unofficial fork. We are not actively maintaining this project — we only publish images to GHCR to ship a feature that was rejected upstream for being AI-generated ([gethomepage/homepage#6295](https://github.com/gethomepage/homepage/pull/6295)). Use at your own discretion.
+> **Note:** This is an unofficial fork. We are not actively maintaining this project — we only publish images to GHCR to ship a feature that was rejected upstream for being AI-generated ([gethomepage/homepage#6295](https://github.com/gethomepage/homepage/pull/6295)). This fork periodically rebases on upstream [gethomepage/homepage](https://github.com/gethomepage/homepage) to stay current. Use at your own discretion.
 
 <p align="center">
   <img src="images/1.png?v=2" />
