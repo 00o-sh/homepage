@@ -53,7 +53,7 @@ jobs:
 
   build:
     name: Docker Build & Push
-    if: github.repository == 'gethomepage/homepage'
+    if: github.repository_owner == 'gethomepage'
     runs-on: self-hosted
     needs: [ pre-commit ]
     permissions:
