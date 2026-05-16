@@ -38,7 +38,11 @@ jobs:
       - name: Add upstream remote
         run: |
           git remote add upstream "${UPSTREAM_URL}"
-          git fetch upstream "${UPSTREAM_BRANCH}" --tags
+          # Branch only — no --tags. Origin's tag namespace is reserved for
+          # release tags built by release.yaml (which point at fork build
+          # commits, not upstream commits); fetching upstream tags here
+          # would clobber them.
+          git fetch upstream "${UPSTREAM_BRANCH}"
 
       - name: Rebase dev onto upstream/dev
         id: rebase
