@@ -191,7 +191,11 @@ jobs:
 
       - name: Create git tag
         run: |
-          git tag "${TAG}" "release/${TAG}"
+          # Local tag may already exist from `git fetch upstream --tags`
+          # (upstream owns the same tag name pointing at a different commit).
+          # Overwrite locally and push; origin should not have a tag for this
+          # name until the release workflow creates one.
+          git tag -f "${TAG}" "release/${TAG}"
           git push origin "refs/tags/${TAG}"
 
       - name: Compose release notes
