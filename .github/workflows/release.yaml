@@ -79,12 +79,16 @@ jobs:
       - name: Add upstream remote and fetch tag
         run: |
           git remote add upstream "${UPSTREAM_URL}"
-          git fetch upstream "${UPSTREAM_BRANCH}" --tags
-          git rev-parse "refs/tags/${TAG}" >/dev/null
+          git fetch upstream "${UPSTREAM_BRANCH}"
+          # Fetch only the target tag, into a namespaced ref to avoid
+          # clobbering origin's tag of the same name (which points at
+          # this fork's build commit, not upstream's commit).
+          git fetch upstream "+refs/tags/${TAG}:refs/upstream/tags/${TAG}"
+          git rev-parse "refs/upstream/tags/${TAG}" >/dev/null
 
       - name: Create release branch from upstream tag
         run: |
-          git checkout -b "release/${TAG}" "refs/tags/${TAG}"
+          git checkout -b "release/${TAG}" "refs/upstream/tags/${TAG}"
 
       - name: Cherry-pick downstream patches from dev
         id: cherry
