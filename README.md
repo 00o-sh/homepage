@@ -1,3 +1,91 @@
+# Fork notice — 00o-sh/homepage
+
+> This is a downstream fork of [`gethomepage/homepage`](https://github.com/gethomepage/homepage). The upstream README is preserved below; the fork-specific docs come first.
+
+## Why this fork exists
+
+We carry exactly one application-level patch on top of upstream: **aggregate totals across multiple kopia repositories** in the kopia widget. The widget upstream renders the first matching source only; the patch sums `totalSize` across every source matching the host/path filter, takes the newest successful `lastSnapshot.startTime` as last run, and the soonest `nextSnapshotTime` as next run. When more than one source matches, the status block reads `N sources`.
+
+The PR upstreaming this was declined. Rather than maintain an ever-diverging fork, we keep the patch as a single commit on `dev` and republish upstream releases with that commit cherry-picked on top.
+
+## Branch model
+
+Single long-lived branch:
+
+| Branch | Purpose | Who writes to it |
+|--------|---------|------------------|
+| `dev` | `gethomepage/homepage:dev` + downstream patches (currently: the kopia aggregation commit) + the two automation workflows + this section. Default branch. | Maintainers when adding/updating a downstream patch. Sync workflow rebases it onto `gethomepage/homepage:dev` daily. |
+| `release/v*` | Ephemeral. Created by the release workflow from an upstream tag, with `dev`'s `src/` and `docs/` patches cherry-picked on top. Deleted after the release is cut. | Release workflow only. |
+
+If you need to fix or extend the downstream patch, commit to `dev`. The next release cut picks the new commit up automatically.
+
+## Release scheme
+
+Tags and Releases here mirror upstream's versioning exactly. When upstream publishes `v1.13.1`, this repo eventually publishes `v1.13.1` too, with our patch applied:
+
+- Git tag `v1.13.1` at the tip of the (now-deleted) `release/v1.13.1` branch.
+- Container image `ghcr.io/00o-sh/homepage:v1.13.1` (and `:v1.13`, `:v1`, plus `:latest` moved forward).
+- A real GitHub Release object (Renovate's `github-releases` datasource needs the Release, not just a tag) with notes linking back to the upstream release and listing the cherry-picked downstream patches.
+
+Downstream (Helm/Renovate) pins to the GitHub Release tag and resolves the matching image tag.
+
+## Workflows
+
+### `sync-upstream.yaml` — daily 00:00 UTC + manual
+
+Fetches `gethomepage/homepage`, rebases fork `dev` onto `upstream/dev`, force-pushes with lease. Opens an issue on conflict.
+
+### `release.yaml` — daily 01:00 UTC + manual
+
+Resolves the target upstream tag (latest by default, or the one passed via `workflow_dispatch` input). If a Release with that tag already exists here, skips. Otherwise:
+
+1. Creates `release/<tag>` from the upstream tag.
+2. Cherry-picks every `--no-merges` commit on `dev` that's not on `upstream/dev`, **restricted to `src/` and `docs/`** — workflows and this section stay on `dev`.
+3. Runs `pnpm install --frozen-lockfile && pnpm run build`, then builds & pushes a multi-arch image to GHCR with semver tags and `:latest`.
+4. Creates the Git tag at the release branch HEAD.
+5. Publishes a GitHub Release.
+6. Deletes the release branch.
+
+Cherry-pick conflicts open an issue and stop.
+
+## Adding another downstream patch
+
+1. Branch off `dev`, write the patch (must touch `src/` or `docs/` to get picked up by the release workflow — see "Release scope caveat" below), open a PR.
+2. Merge to `dev`. The next release cut will include it.
+3. Update the "Why this fork exists" section if the patch warrants explanation.
+
+### Release scope caveat
+
+The release workflow cherry-picks only `src/` and `docs/` paths from `dev`. If you add a patch that needs to ship inside the Docker image but lives outside those paths (e.g. `next.config.js`, `package.json`, top-level config), edit `PATCH_PATHS` in `.github/workflows/release.yaml`.
+
+## Re-cutting a release
+
+If a downstream patch turns out to be broken and we need to re-cut `v1.13.1` (say) with a fix:
+
+1. Fix the patch on `dev` and merge.
+2. Delete the GitHub Release for `v1.13.1` (Releases page → Edit → Delete release).
+3. Delete the Git tag: `git push origin :refs/tags/v1.13.1`.
+4. Delete the GHCR image tag (Packages → homepage → Manage versions).
+5. Trigger `release.yaml` with `tag: v1.13.1`.
+
+The workflow refuses to re-build a tag that already has a Release, so all three deletions are required.
+
+## Maintainer one-time setup
+
+- **Repository → Settings → Actions → General → Workflow permissions**: set to **Read and write permissions**. Both workflows push commits, tags, releases, and images using `GITHUB_TOKEN`.
+- **First image push**: after `release.yaml` runs successfully once, go to **the user profile → Packages → homepage → Package settings**, and change visibility to **Public** so the Helm cluster can pull without auth.
+- **GitHub Releases default**: nothing to configure — the workflow creates Releases via `gh release create --verify-tag`, which publishes immediately (not as draft).
+
+No PATs are required.
+
+## Deprecated: `docker-publish.yml`
+
+The legacy nightly workflow is kept as `workflow_dispatch`-only for one-off debug builds. Its schedule and push triggers are removed; the downstream cluster no longer consumes `:nightly` or `:dev` tags.
+
+---
+
+# Upstream README
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="images/banner_light@2x.png">
