@@ -79,11 +79,13 @@ jobs:
       - name: Add upstream remote and fetch tag
         run: |
           git remote add upstream "${UPSTREAM_URL}"
-          git fetch upstream "${UPSTREAM_BRANCH}"
-          # Fetch only the target tag, into a namespaced ref to avoid
-          # clobbering origin's tag of the same name (which points at
-          # this fork's build commit, not upstream's commit).
-          git fetch upstream "+refs/tags/${TAG}:refs/upstream/tags/${TAG}"
+          # --no-tags is critical: `git fetch <remote> <branch>` auto-follows
+          # tags pointing into the fetched history, which would clobber
+          # origin's release tags (same names, different commits).
+          git fetch --no-tags upstream "${UPSTREAM_BRANCH}"
+          # Fetch only the target tag, into a namespaced ref so upstream's
+          # tag namespace never touches origin's.
+          git fetch --no-tags upstream "+refs/tags/${TAG}:refs/upstream/tags/${TAG}"
           git rev-parse "refs/upstream/tags/${TAG}" >/dev/null
 
       - name: Create release branch from upstream tag
