@@ -1,0 +1,263 @@
+name: Release
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Upstream tag to build (e.g. v1.13.1). Leave empty to build the latest upstream tag if not already released here."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: gethomepage/homepage
+  UPSTREAM_URL: https://github.com/gethomepage/homepage.git
+  UPSTREAM_BRANCH: dev
+  PATCH_BRANCH: dev
+  PATCH_PATHS: "src docs"
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  resolve-tag:
+    name: Resolve target tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      skip: ${{ steps.pick.outputs.skip }}
+    steps:
+      - name: Pick tag
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_TAG:-}" ]]; then
+            tag="${INPUT_TAG}"
+          else
+            tag=$(gh api "repos/${UPSTREAM_REPO}/releases/latest" --jq '.tag_name')
+          fi
+          echo "Selected upstream tag: ${tag}"
+
+          if gh api "repos/${{ github.repository }}/releases/tags/${tag}" --silent 2>/dev/null; then
+            echo "Release ${tag} already exists in this repo; skipping."
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=0" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build & release ${{ needs.resolve-tag.outputs.tag }}
+    needs: resolve-tag
+    if: needs.resolve-tag.outputs.skip == '0'
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.resolve-tag.outputs.tag }}
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch tag
+        run: |
+          git remote add upstream "${UPSTREAM_URL}"
+          git fetch upstream "${UPSTREAM_BRANCH}" --tags
+          git rev-parse "refs/tags/${TAG}" >/dev/null
+
+      - name: Create release branch from upstream tag
+        run: |
+          git checkout -b "release/${TAG}" "refs/tags/${TAG}"
+
+      - name: Cherry-pick downstream patches from dev
+        id: cherry
+        run: |
+          set -euo pipefail
+          # Patches = commits on fork dev not on upstream/dev, restricted to src/+docs/.
+          commits=$(git log --reverse --no-merges --format=%H "upstream/${UPSTREAM_BRANCH}..origin/${PATCH_BRANCH}" -- ${PATCH_PATHS})
+          if [[ -z "${commits}" ]]; then
+            echo "No downstream patch commits to cherry-pick."
+            echo "applied=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Cherry-picking commits:"
+          echo "${commits}"
+          applied=()
+          for sha in ${commits}; do
+            if git cherry-pick -x "${sha}"; then
+              applied+=("${sha}")
+            else
+              conflict_files=$(git diff --name-only --diff-filter=U)
+              git cherry-pick --abort || true
+              {
+                echo "conflict=1"
+                echo "conflict_sha=${sha}"
+                echo "files<<EOF"
+                echo "${conflict_files}"
+                echo "EOF"
+              } >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+          done
+          {
+            echo "applied<<EOF"
+            printf '%s\n' "${applied[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Push release branch
+        run: |
+          git push origin "release/${TAG}"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_VERSION: ${{ env.TAG }}
+          NEXT_PUBLIC_REVISION: ${{ github.sha }}
+        run: |
+          export NEXT_PUBLIC_BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          pnpm run build
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern=v{{version}},value=${{ env.TAG }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ env.TAG }}
+            type=semver,pattern=v{{major}},value=${{ env.TAG }}
+            type=raw,value=latest
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            CI=true
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ env.TAG }}
+            REVISION=${{ github.sha }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+
+      - name: Create git tag
+        run: |
+          git tag "${TAG}" "release/${TAG}"
+          git push origin "refs/tags/${TAG}"
+
+      - name: Compose release notes
+        id: notes
+        env:
+          APPLIED_COMMITS: ${{ steps.cherry.outputs.applied }}
+        run: |
+          {
+            echo "Mirrors upstream [\`${TAG}\`](https://github.com/${UPSTREAM_REPO}/releases/tag/${TAG}) with downstream patches applied."
+            echo
+            echo "Image: \`${IMAGE}:${TAG}\` (also tagged \`latest\`)."
+            echo
+            echo "### Downstream patches applied"
+            echo
+            if [[ -z "${APPLIED_COMMITS}" ]]; then
+              echo "_(none)_"
+            else
+              while IFS= read -r sha; do
+                [[ -z "$sha" ]] && continue
+                subject=$(git log -1 --format=%s "$sha")
+                echo "- \`${sha:0:8}\` ${subject}"
+              done <<<"${APPLIED_COMMITS}"
+            fi
+          } > release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --notes-file release_notes.md \
+            --verify-tag
+
+      - name: Delete release branch
+        if: always()
+        run: |
+          git push origin --delete "release/${TAG}" || true
+
+      - name: Open issue on cherry-pick conflict
+        if: failure() && steps.cherry.outputs.conflict == '1'
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ env.TAG }}
+          CONFLICT_SHA: ${{ steps.cherry.outputs.conflict_sha }}
+          CONFLICT_FILES: ${{ steps.cherry.outputs.files }}
+        with:
+          script: |
+            const tag = process.env.TAG;
+            const sha = process.env.CONFLICT_SHA;
+            const files = process.env.CONFLICT_FILES || '(none reported)';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `release: cherry-pick conflict building ${tag}`,
+              labels: ['release', 'automation'],
+              body: [
+                `Cherry-picking downstream patches onto \`release/${tag}\` (from upstream tag \`${tag}\`) conflicted on commit \`${sha}\`.`,
+                '',
+                'Resolve manually, push the release branch, then re-run the workflow with `tag` input set.',
+                '',
+                'Conflicted files:',
+                '```',
+                files,
+                '```',
+                '',
+                `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n'),
+            });
