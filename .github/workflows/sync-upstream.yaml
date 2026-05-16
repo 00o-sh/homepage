@@ -46,7 +46,9 @@ jobs:
           git checkout "${PATCH_BRANCH}"
           if git rebase "upstream/${UPSTREAM_BRANCH}"; then
             git push --force-with-lease origin "${PATCH_BRANCH}"
-            git push origin --tags
+            # Do NOT push --tags. We want origin's tag namespace to hold
+            # only release tags (created by release.yaml), not upstream's
+            # tags pointing at upstream commits.
           else
             conflict_files=$(git diff --name-only --diff-filter=U)
             git rebase --abort
