@@ -1,0 +1,94 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: gethomepage/homepage
+  UPSTREAM_URL: https://github.com/gethomepage/homepage.git
+  UPSTREAM_BRANCH: dev
+  PATCH_BRANCH: dev
+
+jobs:
+  sync:
+    name: Rebase dev onto upstream/dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream "${UPSTREAM_URL}"
+          git fetch upstream "${UPSTREAM_BRANCH}" --tags
+
+      - name: Rebase dev onto upstream/dev
+        id: rebase
+        run: |
+          git checkout "${PATCH_BRANCH}"
+          if git rebase "upstream/${UPSTREAM_BRANCH}"; then
+            git push --force-with-lease origin "${PATCH_BRANCH}"
+            git push origin --tags
+          else
+            conflict_files=$(git diff --name-only --diff-filter=U)
+            git rebase --abort
+            {
+              echo "conflict=1"
+              echo "files<<EOF"
+              echo "${conflict_files}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Open issue on rebase conflict
+        if: failure() && steps.rebase.outputs.conflict == '1'
+        uses: actions/github-script@v7
+        env:
+          CONFLICT_FILES: ${{ steps.rebase.outputs.files }}
+        with:
+          script: |
+            const files = process.env.CONFLICT_FILES || '(none reported)';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `sync-upstream: dev rebase onto upstream/dev conflicted`,
+              labels: ['sync-upstream', 'automation'],
+              body: [
+                'The daily sync rebased `dev` onto `gethomepage/homepage:dev` and hit conflicts. The rebase was aborted; resolve manually:',
+                '',
+                '```bash',
+                'git remote add upstream https://github.com/gethomepage/homepage.git  # if needed',
+                'git fetch upstream dev',
+                'git checkout dev',
+                'git rebase upstream/dev',
+                '# resolve conflicts, then:',
+                'git push --force-with-lease origin dev',
+                '```',
+                '',
+                'Conflicted files:',
+                '```',
+                files,
+                '```',
+                '',
+                `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n'),
+            });
