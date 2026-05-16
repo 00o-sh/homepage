@@ -124,7 +124,9 @@ jobs:
 
       - name: Push release branch
         run: |
-          git push origin "release/${TAG}"
+          # Force in case a prior failed run left the branch behind
+          # (cleanup step has `if: always()` so this should be rare).
+          git push --force origin "release/${TAG}"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
