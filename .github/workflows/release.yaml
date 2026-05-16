@@ -195,10 +195,10 @@ jobs:
         run: |
           # Local tag may already exist from `git fetch upstream --tags`
           # (upstream owns the same tag name pointing at a different commit).
-          # Overwrite locally and push; origin should not have a tag for this
-          # name until the release workflow creates one.
+          # Overwrite locally and force-push; force handles retries where
+          # origin holds an orphaned tag from a prior failed run.
           git tag -f "${TAG}" "release/${TAG}"
-          git push origin "refs/tags/${TAG}"
+          git push --force origin "refs/tags/${TAG}"
 
       - name: Compose release notes
         id: notes
@@ -226,7 +226,10 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          # gh prefers the `upstream` remote over `origin` when both exist;
+          # GH_REPO forces it to target this fork.
           gh release create "${TAG}" \
             --title "${TAG}" \
             --notes-file release_notes.md \
