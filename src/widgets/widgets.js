@@ -82,6 +82,7 @@ import netdata from "./netdata/widget";
 import nextcloud from "./nextcloud/widget";
 import nextdns from "./nextdns/widget";
 import npm from "./npm/widget";
+import ntfy from "./ntfy/widget";
 import nzbget from "./nzbget/widget";
 import octoprint from "./octoprint/widget";
 import omada from "./omada/widget";
@@ -137,6 +138,7 @@ import trilium from "./trilium/widget";
 import truenas from "./truenas/widget";
 import tubearchivist from "./tubearchivist/widget";
 import unifi from "./unifi/widget";
+import unifi_drive from "./unifi_drive/widget";
 import unmanic from "./unmanic/widget";
 import unraid from "./unraid/widget";
 import uptimekuma from "./uptimekuma/widget";
@@ -238,6 +240,7 @@ const widgets = {
   nextcloud,
   nextdns,
   npm,
+  ntfy,
   nzbget,
   octoprint,
   omada,
@@ -296,6 +299,7 @@ const widgets = {
   truenas,
   unifi,
   unifi_console: unifi,
+  unifi_drive,
   unmanic,
   unraid,
   uptimekuma,
