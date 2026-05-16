@@ -1,29 +1,30 @@
-name: Docker CI
+# DEPRECATED — kept for one-off manual builds only.
+#
+# This workflow used to publish the rolling `:nightly` image. The fork
+# now publishes versioned images (`:vX.Y.Z`, `:latest`) via release.yaml,
+# which is what the downstream cluster pins through Renovate. Do not
+# re-enable the schedule or branch triggers without updating Renovate
+# config — running this workflow on `dev` would push `:dev` to GHCR,
+# which downstream is no longer set up to consume.
+#
+# Left as `workflow_dispatch`-only so it remains available for ad-hoc
+# debugging of the build pipeline outside the release cadence.
+
+name: Docker CI (deprecated)
 
 on:
-  schedule:
-    - cron: '20 0 * * *'
-  push:
-    branches:
-      - main
-      - feature/**
-      - fix/**
-      - dev
-    tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ "dev" ]
-  merge_group:
+  workflow_dispatch:
 
 env:
   IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: ghcr.io
 
 jobs:
 
 
   build:
     name: Docker Build & Push
-    if: github.repository == 'gethomepage/homepage'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -38,19 +39,11 @@ jobs:
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6
         with:
           images: |
-            ${{ env.IMAGE_NAME }}
             ghcr.io/${{ env.IMAGE_NAME }}
           tags: |
-            # Default tags
-            type=schedule,pattern=nightly
-            type=ref,event=branch
-            type=ref,event=tag
-            # Versioning tags
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
+            type=raw,value=nightly,enable=${{ github.event_name == 'workflow_dispatch' }}
           flavor: |
-            latest=auto
+            latest=false
 
       - name: Next.js build cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -83,19 +76,11 @@ jobs:
           pnpm run build
 
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker Hub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
@@ -108,7 +93,7 @@ jobs:
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
