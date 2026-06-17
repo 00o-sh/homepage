@@ -12,10 +12,10 @@ The PR upstreaming this was declined. Rather than maintain an ever-diverging for
 
 Single long-lived branch:
 
-| Branch | Purpose | Who writes to it |
-|--------|---------|------------------|
-| `dev` | `gethomepage/homepage:dev` + downstream patches (currently: the kopia aggregation commit) + the two automation workflows + this section. Default branch. | Maintainers when adding/updating a downstream patch. Sync workflow rebases it onto `gethomepage/homepage:dev` daily. |
-| `release/v*` | Ephemeral. Created by the release workflow from an upstream tag, with `dev`'s `src/` and `docs/` patches cherry-picked on top. Deleted after the release is cut. | Release workflow only. |
+| Branch       | Purpose                                                                                                                                                          | Who writes to it                                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `dev`        | `gethomepage/homepage:dev` + downstream patches (currently: the kopia aggregation commit) + the two automation workflows + this section. Default branch.         | Maintainers when adding/updating a downstream patch. Sync workflow rebases it onto `gethomepage/homepage:dev` daily. |
+| `release/v*` | Ephemeral. Created by the release workflow from an upstream tag, with `dev`'s `src/` and `docs/` patches cherry-picked on top. Deleted after the release is cut. | Release workflow only.                                                                                               |
 
 If you need to fix or extend the downstream patch, commit to `dev`. The next release cut picks the new commit up automatically.
 
