@@ -69,7 +69,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # The release branch is built from an upstream tag, so it carries
+          # workflow files (.github/workflows/*) that differ from this fork's
+          # dev. The default GITHUB_TOKEN is refused when pushing any ref that
+          # creates/updates workflow files ("without `workflows` permission"),
+          # which blocked both the release-branch push and the tag push.
+          #
+          # GH_PAT must be a token (classic PAT with `workflow` scope, or a
+          # fine-grained PAT/App token with Contents:write + Workflows:write)
+          # so these pushes are allowed. Falls back to GITHUB_TOKEN when unset
+          # (which will still hit the guard) so the failure stays obvious.
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Configure git identity
         run: |
