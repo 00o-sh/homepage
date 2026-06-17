@@ -34,4 +34,8 @@ jobs:
           files: ./coverage/lcov.info
           flags: vitest,shard-${{ matrix.shard }}
           name: vitest-shard-${{ matrix.shard }}
-          fail_ci_if_error: true
+          # Non-fatal in this fork: there's no Codecov integration here
+          # (no CODECOV_TOKEN) and the uploader's GPG signature check fails
+          # on the runner, which would otherwise fail the job even though
+          # the tests themselves pass.
+          fail_ci_if_error: false
