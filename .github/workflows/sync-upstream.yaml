@@ -28,7 +28,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Syncing pulls in upstream's changes to .github/workflows/* (e.g.
+          # lint.yml), so the force-push of dev creates/updates workflow
+          # files. The default GITHUB_TOKEN is refused for that ("without
+          # `workflows` permission"), so use GH_PAT (a token with
+          # workflow/Workflows write). Falls back to GITHUB_TOKEN when unset
+          # so a missing secret fails obviously.
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Configure git identity
         run: |
