@@ -1,36 +1,19 @@
-name: Crowdin Action
+# Disabled in this fork (00o-sh/homepage).
+#
+# Upstream automation that does not apply to this fork. Neutered to a
+# workflow_dispatch-only no-op so it never runs on a schedule or on repo
+# events. It is kept as a stub rather than deleted so the daily
+# sync-upstream rebase auto-resolves it via the `forkkeep` merge driver
+# (see .github/workflows/sync-upstream.yaml) instead of hitting a
+# modify/delete conflict every time upstream edits the original.
+name: Crowdin Action (disabled in fork)
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '2 */12 * * *'
-  push:
-    paths: [
-      '/public/locales/en/**',
-    ]
-    branches: [ dev ]
-
-permissions:
-  contents: write
-  pull-requests: write
 
 jobs:
-  synchronize-with-crowdin:
-    name: Crowdin Sync
+  noop:
+    name: Disabled in fork
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - name: crowdin action
-      uses: crowdin/github-action@8f01d54f70f1713ee3f09d82c2bbb2daeac28689 # v2
-      with:
-        upload_translations: false
-        download_translations: true
-        crowdin_branch_name: dev
-        localization_branch_name: l10n_dev
-        pull_request_labels: translation
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-        CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+      - run: echo "This workflow is disabled in the 00o-sh/homepage fork."
