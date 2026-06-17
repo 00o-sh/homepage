@@ -44,6 +44,34 @@ jobs:
           # Origin's tag namespace is reserved for release.yaml's build tags.
           git fetch --no-tags upstream "${UPSTREAM_BRANCH}"
 
+      - name: Configure fork-owned workflow merge strategy
+        run: |
+          # This fork deliberately overrides a handful of workflow files:
+          # the deprecated docker-publish.yml and the neutered upstream-only
+          # workflows (crowdin, repo-maintenance, issue/pr-triage,
+          # docs-publish, release-drafter). Upstream keeps editing those same
+          # files, so a plain rebase conflicts on them on essentially every
+          # run.
+          #
+          # During a rebase git's "ours" is the upstream tip and "theirs"
+          # (%B) is the fork commit being replayed, so a driver of
+          # `cp %B %A` keeps the fork's version and auto-resolves the
+          # conflict. Real conflicts elsewhere (e.g. the kopia src/ patch)
+          # are untouched and still surface for manual resolution.
+          #
+          # .git/info/attributes is used (not a committed .gitattributes) so
+          # this strategy adds no tree divergence of its own.
+          git config merge.forkkeep.driver 'cp -f %B %A'
+          cat > .git/info/attributes <<'EOF'
+          /.github/workflows/docker-publish.yml merge=forkkeep
+          /.github/workflows/crowdin.yml merge=forkkeep
+          /.github/workflows/repo-maintenance.yml merge=forkkeep
+          /.github/workflows/issue-triage.yml merge=forkkeep
+          /.github/workflows/pr-triage.yml merge=forkkeep
+          /.github/workflows/docs-publish.yml merge=forkkeep
+          /.github/workflows/release-drafter.yml merge=forkkeep
+          EOF
+
       - name: Rebase dev onto upstream/dev
         id: rebase
         run: |
